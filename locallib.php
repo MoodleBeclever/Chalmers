@@ -23,24 +23,33 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-// Old way of achieving the course participant count.
+// New way of achieving the course participant count.
 function get_course_student_number ($courseid) {
-    global $DB;
-    $sql = "SELECT COUNT(*) AS participant
-        FROM (SELECT DISTINCT ue.userid, e.courseid FROM {user_enrolments} ue, {enrol} e, {course} c
-        WHERE ue.enrolid = e.id AND e.courseid=? AND c.id = e.courseid AND c.visible = 1) total;";
-    $participants = $DB->get_record_sql($sql, [$courseid]);
-    return $participants->participant;
+
+    $context = context_course::instance($courseid);
+    $participants = get_users_by_capability($context, 'mod/assign:submit');
+    $result = 0;
+    foreach ($participants as $participant) {
+        if (is_participant_active($participant, $courseid)) {
+            $result++;
+        }
+    }
+
+    return $result;
 }
 
-// New way of achieving the course participant count.
-function get_course_student_number2 ($courseid) {
+//Checks if the participant is active or not.
+function is_participant_active($participant, $courseid) {
     global $DB;
-    $sql = "SELECT COUNT(*) AS participant
-        FROM (SELECT DISTINCT ra.userid, c.instanceid from {role_assignments}
-        ra inner join {context} c on ra.contextid=c.id where c.instanceid= ? and ra.roleid = 5) total;";
-    $participants = $DB->get_record_sql($sql, [$courseid]);
-    return $participants->participant;
+    $sql = "SELECT ue.id, ue.status 
+        FROM {user_enrolments} ue INNER JOIN {enrol} e ON ue.enrolid=e.id 
+        WHERE ue.userid = ? AND e.courseid = ?;";
+    $enrol = $DB->get_record_sql($sql, [$participant->id, $courseid]);
+    if ($enrol->status == 0) {
+        return true;
+    } else {
+        return false;
+    }
 }
 // This function gets the fullname of a course when an id is provided.
 function get_course_name ($id) {
@@ -85,7 +94,7 @@ function get_table_insertion_data () {
         $qinstertion->courseid = $quiz->courseid;
         $qinstertion->moduleid = $quiz->moduleid;
         $qinstertion->modulecreationdate = $quiz->modulecreationdate;
-        $qinstertion->nstudents = get_course_student_number2($quiz->courseid);
+        $qinstertion->nstudents = get_course_student_number($quiz->courseid);
 
         $allinsertions[] = $qinstertion;
     }
@@ -104,7 +113,7 @@ function get_table_insertion_data () {
         $tinstertion->courseid = $task->courseid;
         $tinstertion->moduleid = $task->moduleid;
         $tinstertion->modulecreationdate = $task->modulecreationdate;
-        $tinstertion->nstudents = get_course_student_number2($task->courseid);
+        $tinstertion->nstudents = get_course_student_number($task->courseid);
 
         $allinsertions[] = $tinstertion;
     }
@@ -384,13 +393,11 @@ function update_rows($exams) {
     }
 }
 // This function gets the email of the teachers within the course provided.
-function get_teachersemails_onview($courseid) {
+function get_teachersemails($courseid) {
     global $DB;
-    $sql = 'SELECT u.email AS email
-        FROM {role_assignments} ra INNER JOIN {context} c ON ra.contextid=c.id INNER JOIN {user} u ON ra.userid=u.id 
-        WHERE c.instanceid=? AND ra.roleid=3;';
-    $teachers = $DB->get_records_sql($sql, [$courseid]);
-    $result;
+    
+    $context = context_course::instance($courseid);
+    $teachers = get_users_by_capability($context, 'moodle/grade:manage');
     $i = count($teachers);
     foreach ($teachers as $teacher) {
         if ($i == count($teachers)) {
@@ -400,25 +407,7 @@ function get_teachersemails_onview($courseid) {
         }
         $i--;
     }
-    return $result;
-}
-// This function gets the email of the teachers within the course provided.
-function get_teachersemails($courseid) {
-    global $DB;
-    $sql = 'SELECT u.email AS email
-        FROM {role_assignments} ra INNER JOIN {context} c ON ra.contextid=c.id INNER JOIN {user} u ON ra.userid=u.id 
-        WHERE c.instanceid=? AND ra.roleid=3;';
-    $teachers = $DB->get_records_sql($sql, [$courseid]);
-    $result;
-    $i = count($teachers);
-    foreach ($teachers as $teacher) {
-        if ($i == count($teachers)) {
-            $result = $teacher->email;
-        } else {
-            $result = $result . ';' . $teacher->email;
-        }
-        $i--;
-    }
+
     return $result;
 }
 // This function gets the attemp limit of a quiz.
@@ -437,16 +426,7 @@ function get_task_attemps ($id) {
 
     return (int) $attempt->maxattempts;
 }
-/*
-function get_task_attemps ($id) {
-    global $DB;
-    $attempt = $DB->get_record('assign', array('id' => $id), 'attemptreopenmethod, maxattempts');
-    if ($attempt->maxattempts == '-1') {
-        $attempt->maxattempts = 'sin limite de';
-    }
-    return 'Reapertura '.$attempt->attemptreopenmethod.' '.$attempt->maxattempts.' intento';
-}
-*/
+
 
 // This function get the day +the number given.
 function getdayforwards($day) {
@@ -526,7 +506,7 @@ function get_peak_users($date) {
         $sql = "SELECT id FROM {report_chalmers_user_peaks} WHERE startdate=? AND enddate=?";
         $peaks = $DB->get_records_sql($sql, [$timestart, $timeend]);
 
-        if (count($peaks) == 0) {
+        if (count($peaks) != 0) {
             $returndata[] = $peak;
             $dataobject = new stdClass();
             $dataobject->nstudents = $peak['maxusers'];
@@ -542,9 +522,8 @@ function get_peak_users($date) {
 function get_system_manager() {
     global $DB;
 
-    $sql = 'SELECT u.* FROM mdl_user u JOIN mdl_role_assignments ra ON u.id=ra.userid
-        JOIN mdl_context c ON ra.contextid=c.id WHERE c.contextlevel=10 AND ra.roleid = 9;';
-    $data = $DB->get_records_sql($sql, []);
+    $context = context_system::instance();
+    $data = get_users_by_capability($context, 'moodle/site:uploadusers');
 
     $returndata = array();
 

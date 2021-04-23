@@ -195,7 +195,7 @@ foreach ($data as $key => $value) {
     if (!$table->is_downloading()) {
         $course = '<a href="'.$url.'/course/view.php?id='.$value->courseid.'">'.get_course_name($value->courseid).'</a>';
         $value->nstudents = '<a href="'.$url.'/user/index.php?id='.$value->courseid.'">'.$value->nstudents.'</a>';
-        $teachers = get_teachersemails_onview($value->courseid);
+        $teachers = get_teachersemails($value->courseid);
         $row = array('quiz' => $value->quizid, 'task' => $value->taskid, 'coursename' => $course, 'teacher' => $teachers,
           'startdate' => $value->startdate->format('d/m/Y H:i'), 'enddate' => $value->enddate->format('d/m/Y H:i'),
           'nstudents' => $value->nstudents, 'timelimit' => $value->timelimit);

@@ -37,9 +37,9 @@ $tasks = array(
         'classname' => 'report_chalmers\task\notifications',
         'blocking' => 0,
         'minute' => '00',
-        'hour' => '18',
+        'hour' => '8',
         'day' => '*',
-        'dayofweek' => '0',
+        'dayofweek' => '*',
         'month' => '*',
     ),
 );
