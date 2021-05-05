@@ -506,7 +506,7 @@ function get_peak_users($date) {
         $sql = "SELECT id FROM {report_chalmers_user_peaks} WHERE startdate=? AND enddate=?";
         $peaks = $DB->get_records_sql($sql, [$timestart, $timeend]);
 
-        if (count($peaks) != 0) {
+        if (count($peaks) == 0) {
             $returndata[] = $peak;
             $dataobject = new stdClass();
             $dataobject->nstudents = $peak['maxusers'];
